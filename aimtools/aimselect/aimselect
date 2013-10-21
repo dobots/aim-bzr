@@ -1,0 +1,117 @@
+#!/bin/bash
+
+# Author: Anne C. van Rossum
+# License: GNU LGPLv3 
+# Date: Jun. 17, 2012
+
+PROGRAM="aimselect"
+
+VERSION="0.3"
+
+#######################################################################################################################
+# Default configuration
+#######################################################################################################################
+
+AIM_CONFIG_PATH=/etc/aim
+AIM_CONFIG_FILE=/etc/aim/config.sh
+
+source $AIM_CONFIG_FILE
+source $AIM_CONFIG_COLOR
+source $AIM_CONFIG_SANITY
+
+msg_init $PROGRAM
+
+#######################################################################################################################
+# User configuration
+#######################################################################################################################
+
+if [ -e ${RUR_CONFIG_FILE_BACKENDS} ]; then
+	source $RUR_CONFIG_FILE_BACKENDS
+fi
+
+#######################################################################################################################
+# Argument checks
+#######################################################################################################################
+
+if [[ $AIM_VERSION != $VERSION ]]; then
+	msg_error "${PROGRAM} is version ${VERSION}, while it should be version ${AIM_VERSION}."
+	exit 0
+fi
+
+MIDDLEWARES=('yarp' 'ros' 'nodejs' 'zeromq')
+
+if [[ "$1" == "" ]]
+then
+	msg_error "No args supplied! Run $0 -h for more info"
+	exit 1
+fi
+
+if [[ "$1" == "-h" ]]
+then
+	echo "$PROGRAM $VERSION - Usage"
+	echo 
+	echo "$PROGRAM \"module name\" \"middleware\""
+	echo 
+	echo "Currently supported middlewares: ${MIDDLEWARES[@]}"
+	exit 0 
+fi 
+
+if [[ $# -ne 2 ]]
+then
+	msg_error "We need one parameters. Run $0 -h for more info, currently you used $# parameters"
+	exit 1
+fi
+
+
+####################################################################################################
+# Specific checks
+####################################################################################################
+
+modulename=$1
+middleware=$2
+
+# Check if there are no whitespaces
+mn_sanity_check=${modulename//[[:space:]]}
+
+if [[ ! -a $modulename ]]; then
+	msg_error "The directory $modulename does not exist"
+	exit 1
+fi
+
+if [[ "$mn_sanity_check" == "$1" ]]; then
+	if [[ "$1" == *Module ]]; then
+		msg_info "Configure $modulename to use middleware $middleware"
+	else
+		msg_warning "Not a proper module (should end the module with \"Module\")"
+		exit 1
+	fi
+else
+	msg_warning "Not a proper module (has whitespaces)"
+	exit 1
+fi
+
+####################################################################################################
+# Start
+####################################################################################################
+
+build_cmd=BUILD_STANDARD
+if [[ $middleware == "yarp" ]]; then
+	build_cmd="BUILD_YARP"
+elif [[ $middleware == "zeromq" ]]; then
+	build_cmd="BUILD_ZEROMQ"
+elif [[ $middleware == "nodejs" ]]; then
+	build_cmd="BUILD_NODEJS"
+elif [[ $middleware == "ros" ]]; then
+	build_cmd="BUILD_ROS"
+fi
+
+cd $modulename
+
+# make sure the directory to switch exists
+mkdir -p aim-devel
+
+#msg_info "Set \"set($build_cmd on)\" as cmake configure option in aim/local.cmake"
+msg_info "Set \"middleware=$middleware\" as configuration option in aim-devel/middleware_local.aim"
+echo "middleware=$middleware" > aim-devel/middleware_local.aim
+
+cd ..

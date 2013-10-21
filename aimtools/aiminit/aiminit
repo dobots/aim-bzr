@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# Author: Anne C. van Rossum
+# License: GNU LGPLv3 
+# Date: Jun. 18, 2013
+
+PROGRAM="aiminit"
+
+VERSION="0.3"
+
+#######################################################################################################################
+# Default configuration
+#######################################################################################################################
+
+AIM_CONFIG_PATH=/etc/aim
+AIM_CONFIG_FILE=/etc/aim/config.sh
+
+source $AIM_CONFIG_FILE
+source $AIM_CONFIG_COLOR
+source $AIM_CONFIG_SANITY
+
+msg_init $PROGRAM
+
+#######################################################################################################################
+# User configuration
+#######################################################################################################################
+
+if [ -e ${RUR_CONFIG_FILE_BACKENDS} ]; then
+	source $RUR_CONFIG_FILE_BACKENDS
+fi
+
+#######################################################################################################################
+# Argument checks
+#######################################################################################################################
+
+if [[ $AIM_VERSION != $VERSION ]]; then
+	msg_error "${PROGRAM} is version ${VERSION}, while it should be version ${AIM_VERSION}."
+	exit 0
+fi
+
+if [[ "$1" == "" ]]
+then
+	msg_error "No args supplied! Run $0 -h for more info"
+	exit 1
+fi
+
+if [[ "$1" == "-h" ]]
+then
+	echo "$PROGRAM $VERSION - Usage"
+	echo 
+	echo "$PROGRAM \"repository name\""
+	echo "  for example: $PROGRAM computervision"
+	echo "  the repository name will be used to be able to maintain multiple repositories"
+	echo
+	echo "Set AIM_WORKSPACE as environmental variable before you use this tool"
+	echo "  for example: export AIM_WORKSPACE=$HOME/aim_workspace"
+	exit 0 
+fi 
+
+if [[ $# -ne 1 ]]
+then
+	msg_error "We need one parameter. Run $0 -h for more info, currently you used $# parameters"
+	exit 1
+fi
+
+#######################################################################################################################
+# Start
+#######################################################################################################################
+
+REPOS_NAME=$1
+
+: ${AIM_WORKSPACE:? "Set AIM_WORKSPACE as environmental variable before you use this tool"}
+
+[ ! -d $AIM_WORKSPACE ] && msg_info "Workspace path \"$AIM_WORKSPACE\" not found" && exit 0
+	
+msg_info "We will use $AIM_WORKSPACE for a workspace"
+
+cd $AIM_WORKSPACE
+
+#if [[ $REPOS_URL =~ .*github.* ]]; then
+#	msg_info "This is a github repository"
+#	msg_info "git clone $REPOS_URL $REPOS_NAME"
+#	[ -d $REPOS_NAME ] && msg_info "Directory \"$REPOS_NAME\" already exists" && exit 0
+#	git clone $REPOS_URL $REPOS_NAME
+#fi
+
+[ -d $REPOS_NAME ] && msg_info "Directory \"$REPOS_NAME\" already exists" && exit 0
+
+msg_info "Create repository with name: $REPOS_NAME"
+mkdir $REPOS_NAME
+cd $REPOS_NAME
+
+msg_info "Initialize it as a git repository"
+git init 
+

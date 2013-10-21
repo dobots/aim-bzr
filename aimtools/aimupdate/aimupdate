@@ -1,0 +1,120 @@
+#!/bin/bash
+
+PROGRAM="aimupdate"
+
+VERSION="0.3"
+
+#######################################################################################################################
+# Default configuration
+#######################################################################################################################
+
+AIM_CONFIG_PATH=/etc/aim
+AIM_CONFIG_FILE=/etc/aim/config.sh
+
+source $AIM_CONFIG_FILE
+source $AIM_CONFIG_COLOR
+source $AIM_CONFIG_SANITY
+
+msg_init $PROGRAM
+
+#######################################################################################################################
+# Argument checks
+#######################################################################################################################
+
+if [[ $AIM_VERSION != $VERSION ]]; then
+	msg_error "${PROGRAM} is version ${VERSION}, while it should be version ${AIM_VERSION}."
+	exit 0
+fi
+
+if [[ "$1" == "" ]]
+then
+	echo "No args supplied! Run $0 -h for more info"
+	exit 1
+fi
+
+if [[ "$1" == "-h" ]]
+then
+	echo $PROGRAM $VERSION \- Usage
+	echo 
+	echo $PROGRAM \"ModuleName\"
+	echo
+	exit 0 
+fi 
+
+modulename="$1"
+
+aim_sanity $modulename error
+if [[ "$error" != 0 ]]; then
+	msg_error "Module name check failed."
+	exit 1
+fi
+
+#######################################################################################################################
+# Functions
+#######################################################################################################################
+
+update_personal_info() {
+	working_path=$1
+	
+	if [ -e $HOME/.rur/personal_info.txt ]; then
+		source $HOME/.rur/personal_info.txt
+	else
+		source $RUR_CONFIG_PATH/personal_info.txt
+	fi
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${yourname}|$yourname|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${youremail}|$youremail|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${yourorganisation}|$yourorganisation|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${yourproject}|$yourproject|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${license}|$license|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${license_abbreviation}|$license_abbreviation|g"
+	
+	thisyear=$(date +"%Y")
+	thisdate=$(date +"%b %e, %Y")
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${year}|$thisyear|g"
+	find $working_path -not -iwholename '*.svn' -type f | xargs sed -i -e "s|\${date}|$thisdate|g"
+}
+
+#######################################################################################################################
+# Start
+#######################################################################################################################
+
+msg_info "Create tar ball $modulename.tar.gz as backup for \"$modulename/\""
+tar -czf "$modulename".tar.gz --exclude=.svn --exclude=builds/ "$modulename"
+
+cd "$modulename"
+modulepath=$(pwd)
+msg_info "Ready to copy templates from \"$RUR_TEMPLATE_PATH/\" to \"$modulepath/\""
+msg_info "Previous files can be overwritten, but the copy is with an -i flag. So it will interactively ask you."
+
+msg_debug "Create temporary folder with matching files"
+tmpdir=$(mktemp -d -t aimXXXXX)
+trap 'rm -rf "$tmpdir"' EXIT
+rsync -azulq $RUR_TEMPLATE_PATH/ $tmpdir
+msg_debug "Using -print0 and xargs -0 between find and sed. If this does not work on BSD / Mac OS, tell us."
+find $tmpdir -not -iwholename '*.svn' -not -iwholename '/builds' -type f -print0 | xargs -0 sed -i -e "s/TemplateModule/$modulename/g"
+
+for file in $(find $tmpdir -not -iwholename '*.svn' -type f -name TemplateModule*); do
+	newfile=${file/TemplateModule/$modulename}
+	mv -i $file $newfile
+done
+
+msg_info "Update personal info"
+update_personal_info $tmpdir
+
+msg_info "Actual copying of different files starts now"
+for file in $(find $tmpdir -type f); do
+	newfile=${file#$tmpdir/}
+	cmp --silent $file $newfile || diff -U 10 -s $newfile $file
+	cmp --silent $file $newfile || cp -i $file $newfile 
+done
+
+msg_info "Copy the idl file from previous location to a new one"
+silent_cp aim/idl/*.idl aim-config/
+
+msg_info "Create masks for build directories in a .gitignore file"
+echo "builds/" >> .gitignore
+echo "aim-devel/" >> .gitignore
+
+
+msg_info "You can remove the aim/ directory and the build/ directory from the previous AIM version"
+

@@ -1,0 +1,126 @@
+#!/bin/bash
+
+PROGRAM="aimconnect"
+
+VERSION="0.2"
+
+#######################################################################################################################
+# Default configuration
+#######################################################################################################################
+
+AIM_CONFIG_PATH=/etc/aim
+AIM_CONFIG_FILE=/etc/aim/config.sh
+
+source $AIM_CONFIG_FILE
+source $AIM_CONFIG_COLOR
+source $AIM_CONFIG_SANITY
+
+msg_init $PROGRAM
+
+####################################################################################################
+# User configuration
+####################################################################################################
+
+if [ -e ${RUR_CONFIG_FILE_BACKENDS} ]; then
+	source $RUR_CONFIG_FILE_BACKENDS
+fi
+
+####################################################################################################
+# Checks
+####################################################################################################
+
+if [[ $AIM_VERSION != $VERSION ]]; then
+	msg_error "${PROGRAM} is version ${VERSION}, while it should be version ${AIM_VERSION}."
+	exit 0
+fi
+
+if [[ "$1" == "-h" ]]
+then
+	echo $PROGRAM $VERSION \- Usage
+	echo 
+	echo $PROGRAM \"middleware\" \"module1 name\" \"module1 index\" \"module 1 port\" \"module 2 name\" \"module 2 index\" \"module 2 port\"
+	echo "  with middleware: [yarp | zeromq ]"
+	echo
+	exit 0 
+fi
+
+if [[ $# -ne 7 ]]
+then
+	msg_error "We need seven parameters. Run $0 -h for more info, currently you used $# parameters"
+	exit 1
+fi
+
+MIDDLEWARE=${1%/}
+CONNECT_UTILITY=
+if [[ $MIDDLEWARE == "yarp" ]]; then
+	CONNECT_UTILITY="yarp connect"
+elif [[ $MIDDLEWARE == "zeromq" ]]; then
+	CONNECT_UTILITY="zmqconnect"
+fi
+
+# Shift all arguments
+shift
+
+MODULE_NAME1=${1%/}
+MODULE_ID1=${2%}
+PORT_NAME1=${3%}
+
+MODULE_NAME2=${4%/}
+MODULE_ID2=${5%}
+PORT_NAME2=${6%}
+
+if [[ $MIDDLEWARE == "yarp" ]]; then
+	msg_debug "Check if yarp server is actually running"
+	SERVER=$(ps aux | grep "yarp" | grep "server")
+	if [[ -z "$SERVER" ]]; then
+		msg_error "Cannot find the server, start the yarp server first!"
+		exit 0
+	fi
+elif [[ $MIDDLEWARE == "zeromq" ]]; then
+	msg_debug "Check if zmq server is actually running"
+	SERVER=$(ps aux | grep "zmq" | grep "server")
+	if [[ -z "$SERVER" ]]; then
+		msg_error "Cannot find the server, start the zmq server first!"
+		exit 0
+	fi
+fi
+
+
+msg_debug "Search in ${RUR_HOME}/${AIM_REGISTRY}"
+SUCCESS1=false
+SUCCESS2=false
+
+MODULE_FULLNAME=
+while read LINE; do
+	MODULE_I=$(echo "$LINE" | cut -d'=' -f 1)
+	M_I_STRIPPED=${MODULE_I//[[:space:]]}
+	if [[  ${MODULE_NAME1} == ${M_I_STRIPPED}*  ]]; then
+		msg_debug "$MODULE_NAME1 found. prepare to connect it"
+		MODULE_FULLNAME=$(echo "$LINE" | cut -d'=' -f 2)
+		SUCCESS1=true
+		break
+	fi
+done < "${AIM_REGISTRY}"
+
+while read LINE; do
+	MODULE_I=$(echo "$LINE" | cut -d'=' -f 1)
+	M_I_STRIPPED=${MODULE_I//[[:space:]]}
+	if [[  ${MODULE_NAME2} == $M_I_STRIPPED* ]]; then
+		msg_debug "$MODULE_NAME2 found. prepare to connect it"
+		MODULE_FULLNAME=$(echo "$LINE" | cut -d'=' -f 2)
+		SUCCESS2=true
+		break
+	fi
+done < "${AIM_REGISTRY}"
+
+
+if [ $SUCCESS1 == true ] && [ $SUCCESS2 == true ]; then
+	msg_info"Connect $MODULE_NAME1 and $MODULE_NAME2"
+	msg_info "Exact command: /${MODULE_NAME1,,}$MODULE_ID1/$PORT_NAME1 /${MODULE_NAME2,,}$MODULE_ID2/$PORT_NAME2"
+#	sleep 1
+	$CONNECT_UTILITY /${MODULE_NAME1,,}$MODULE_ID1/$PORT_NAME1 /${MODULE_NAME2,,}$MODULE_ID2/$PORT_NAME2
+else
+	msg_error "One of the modules is not found (${MODULE_NAME1}) or (${MODULE_NAME2})"
+fi
+
+exit 0

@@ -1,0 +1,77 @@
+#!/bin/bash
+
+# Author: Anne C. van Rossum
+# License: GNU LGPLv3 
+# Date: Jun. 17, 2012
+
+PROGRAM="aim"
+
+VERSION="0.2"
+
+#######################################################################################################################
+# Default configuration
+#######################################################################################################################
+
+AIM_CONFIG_PATH=/etc/aim
+AIM_CONFIG_FILE=/etc/aim/config.sh
+
+source $AIM_CONFIG_FILE
+source $AIM_CONFIG_COLOR
+source $AIM_CONFIG_SANITY
+
+#######################################################################################################################
+# User configuration
+#######################################################################################################################
+
+if [ -e ${RUR_CONFIG_FILE_BACKENDS} ]; then
+	source $RUR_CONFIG_FILE_BACKENDS
+fi
+
+#######################################################################################################################
+# Argument checks
+#######################################################################################################################
+
+if [[ "$1" == "" ]]
+then
+	msg_error "No args supplied! Run $0 -h for more info"
+	exit 1
+fi
+
+if [[ "$1" == "-h" || "$1" == "help" ]]
+then
+	echo "$PROGRAM $VERSION - Usage"
+	echo 
+	echo "$PROGRAM \"command\" [options]"
+	echo
+	echo "Currently supported commands:"
+	echo
+	echo " aimget: add a github repository to your AIM workspace"
+	echo " aiminit: create your own local github repository in your AIM workspace"
+	echo " aimcreate-pkg: create a new AI module"
+	echo " aimregister: register the module locally"
+	echo " aimselect: select a specific middleware to compile for"
+	echo " aimmake: compile the module"
+	echo " aimcross: cross-compile the module (currently supported: blackfin; upcoming: raspberry)"
+	echo " aimrun: run a previously registered module"
+	echo " aimconnect: connect two ports on running modules"
+	echo " aimstop: stop the module locally"
+	exit 0 
+fi 
+
+#######################################################################################################################
+# Start
+#######################################################################################################################
+
+COMMAND=$1
+
+EXEC=aim$COMMAND
+
+AIMTOOL_EXISTS=$(command -v $EXEC)
+
+[ -z $AIMTOOL_EXISTS ] && msg_info "This aim tool \"$EXEC\" cannot be found" && exit 0
+
+shift
+
+msg_info "Execute: $EXEC $@"	
+$EXEC $@
+
